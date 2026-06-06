@@ -6,7 +6,7 @@ loadEnv();
 
 const PORT = Number(process.env.PORT || 8787);
 const ARK_API_KEY = process.env.ARK_API_KEY;
-const DOUBAO_MODEL = process.env.DOUBAO_MODEL || "doubao-seed-1-6-vision-250815";
+const DOUBAO_MODEL = process.env.DOUBAO_MODEL || "doubao-seed-2-0-lite-260215";
 const ARK_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
 
 const rateBuckets = new Map();
