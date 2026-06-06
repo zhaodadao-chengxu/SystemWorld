@@ -1,0 +1,80 @@
+// !$*UTF8*$!
+{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
+
+/* Begin PBXBuildFile section */
+S01 /* SystemWorldApp.swift */ = {isa = PBXBuildFile; fileRef = F01; };
+S02 /* SystemHomeView.swift */ = {isa = PBXBuildFile; fileRef = F02; };
+S03 /* SystemModels.swift */ = {isa = PBXBuildFile; fileRef = F03; };
+S04 /* SystemStore.swift */ = {isa = PBXBuildFile; fileRef = F04; };
+S06 /* Assets.xcassets */ = {isa = PBXBuildFile; fileRef = F06; };
+S07 /* TaskHallView.swift */ = {isa = PBXBuildFile; fileRef = F13; };
+S08 /* ProfileStatsView.swift */ = {isa = PBXBuildFile; fileRef = F08; };
+S09 /* PressEffect.swift */ = {isa = PBXBuildFile; fileRef = F09; };
+S10 /* MainTabView.swift */ = {isa = PBXBuildFile; fileRef = F10; };
+S11 /* DesignTokens.swift */ = {isa = PBXBuildFile; fileRef = F11; };
+S12 /* DesignComponents.swift */ = {isa = PBXBuildFile; fileRef = F12; };
+S13 /* ShareService.swift */ = {isa = PBXBuildFile; fileRef = F14; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+F01 /* SystemWorldApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemWorldApp.swift; sourceTree = SOURCE_ROOT; };
+F02 /* SystemHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemHomeView.swift; sourceTree = "<group>"; };
+F03 /* SystemModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemModels.swift; sourceTree = "<group>"; };
+F04 /* SystemStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemStore.swift; sourceTree = "<group>"; };
+F06 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = SOURCE_ROOT; };
+F07 /* TaskHallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskHallView.swift; sourceTree = "<group>"; };
+F08 /* ProfileStatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileStatsView.swift; sourceTree = "<group>"; };
+F09 /* PressEffect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PressEffect.swift; sourceTree = "<group>"; };
+F10 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+F11 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+F12 /* DesignComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignComponents.swift; sourceTree = "<group>"; };
+F13 /* TaskHallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskHallView.swift; sourceTree = "<group>"; };
+F14 /* ShareService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareService.swift; sourceTree = "<group>"; };
+F15 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = SOURCE_ROOT; };
+P01 /* SystemWorld.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SystemWorld.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+G01 = {isa = PBXGroup; children = (F01, F06, F15, G02, G03, G04, G05, G06, G07, G08); sourceTree = SOURCE_ROOT; };
+G02 /* Products */ = {isa = PBXGroup; children = (P01); name = Products; sourceTree = "<group>"; };
+G03 /* Models */ = {isa = PBXGroup; children = (F03); path = Models; sourceTree = "<group>"; };
+G04 /* ViewModels */ = {isa = PBXGroup; children = (F04); path = ViewModels; sourceTree = "<group>"; };
+G05 /* Views */ = {isa = PBXGroup; children = (F02, F08, F10, F13); path = Views; sourceTree = "<group>"; };
+G06 /* Services */ = {isa = PBXGroup; children = (F14); path = Services; sourceTree = "<group>"; };
+G07 /* Utilities */ = {isa = PBXGroup; children = (F09); path = Utilities; sourceTree = "<group>"; };
+G08 /* DesignSystem */ = {isa = PBXGroup; children = (F11, F12); path = DesignSystem; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+T01 /* SystemWorld */ = {isa = PBXNativeTarget; buildConfigurationList = CL02; buildPhases = (SP01, FP01, RP01); buildRules = (); dependencies = ();
+    name = SystemWorld; productName = SystemWorld; productReference = P01; productType = "com.apple.product-type.application"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+PR01 /* Project object */ = {isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 2600; LastUpgradeCheck = 2600;
+    TargetAttributes = { T01 = { CreatedOnToolsVersion = 26.0; }; }; };
+    buildConfigurationList = CL01; compatibilityVersion = "Xcode 14.0"; developmentRegion = "zh-Hans";
+    hasScannedForEncodings = 0; knownRegions = (en, "zh-Hans", Base);
+    mainGroup = G01; productRefGroup = G02; projectDirPath = ""; projectRoot = ""; targets = (T01); };
+/* End PBXProject section */
+
+/* Begin PBXFrameworksBuildPhase section */ FP01 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+/* Begin PBXResourcesBuildPhase section */ RP01 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (S06); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+/* Begin PBXSourcesBuildPhase section */ SP01 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (S01, S02, S03, S04, S07, S08, S09, S10, S11, S12, S13); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+C01 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; IPHONEOS_DEPLOYMENT_TARGET = 18.0; SDKROOT = iphoneos; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
+C02 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; IPHONEOS_DEPLOYMENT_TARGET = 18.0; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; VALIDATE_PRODUCT = YES; }; name = Release; };
+C03 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = T6X6R5T45G; ENABLE_PREVIEWS = YES; INFOPLIST_FILE = Info.plist; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.jiezhao.systemworld; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; }; name = Debug; };
+C04 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = T6X6R5T45G; ENABLE_PREVIEWS = YES; INFOPLIST_FILE = Info.plist; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.jiezhao.systemworld; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+CL01 /* project */ = {isa = XCConfigurationList; buildConfigurations = (C01, C02); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+CL02 /* target */ = {isa = XCConfigurationList; buildConfigurations = (C03, C04); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+
+}; rootObject = PR01; }

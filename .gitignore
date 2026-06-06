@@ -1,0 +1,6 @@
+Backend/.env
+Backend/node_modules/
+.DS_Store
+DerivedData/
+*.xcuserstate
+xcuserdata/
