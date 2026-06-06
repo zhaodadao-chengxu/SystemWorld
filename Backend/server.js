@@ -5,9 +5,9 @@ import { resolve } from "node:path";
 loadEnv();
 
 const PORT = Number(process.env.PORT || 8787);
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
-const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
+const ARK_API_KEY = process.env.ARK_API_KEY;
+const DOUBAO_MODEL = process.env.DOUBAO_MODEL || "doubao-seed-1-6-vision-250815";
+const ARK_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
 
 const rateBuckets = new Map();
 const RATE_WINDOW_MS = 60_000;
@@ -20,8 +20,8 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, {
         ok: true,
         service: "SystemWorld AI Backend",
-        model: DEEPSEEK_MODEL,
-        hasKey: Boolean(DEEPSEEK_API_KEY)
+        model: DOUBAO_MODEL,
+        hasKey: Boolean(ARK_API_KEY)
       });
     }
 
@@ -29,8 +29,8 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 404, { error: "Not found" });
     }
 
-    if (!DEEPSEEK_API_KEY) {
-      return sendJSON(res, 503, { error: "DEEPSEEK_API_KEY is not configured" });
+    if (!ARK_API_KEY) {
+      return sendJSON(res, 503, { error: "ARK_API_KEY is not configured" });
     }
 
     const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
@@ -41,6 +41,8 @@ const server = http.createServer(async (req, res) => {
     const body = await readJSON(req);
     const operation = String(body.operation || "");
     const prompt = String(body.prompt || "");
+    const imageBase64 = body.imageBase64 ? String(body.imageBase64) : "";
+    const imageMimeType = String(body.imageMimeType || "image/jpeg");
 
     if (!["generateSystem", "generateTask", "reviewTask", "reviewHallTask"].includes(operation)) {
       return sendJSON(res, 400, { error: "Unsupported operation" });
@@ -50,7 +52,11 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 400, { error: "Invalid prompt" });
     }
 
-    const content = await callDeepSeek(operation, prompt);
+    if (imageBase64 && imageBase64.length > 7_000_000) {
+      return sendJSON(res, 400, { error: "Image is too large" });
+    }
+
+    const content = await callDoubao(operation, prompt, imageBase64, imageMimeType);
     return sendJSON(res, 200, { content });
   } catch (error) {
     console.error(error);
@@ -113,18 +119,30 @@ function readJSON(req) {
   });
 }
 
-async function callDeepSeek(operation, prompt) {
-  const response = await fetch(DEEPSEEK_URL, {
+async function callDoubao(operation, prompt, imageBase64, imageMimeType) {
+  const userContent = imageBase64
+    ? [
+        { type: "text", text: prompt },
+        {
+          type: "image_url",
+          image_url: {
+            url: `data:${safeImageMimeType(imageMimeType)};base64,${imageBase64}`
+          }
+        }
+      ]
+    : prompt;
+
+  const response = await fetch(ARK_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+      "Authorization": `Bearer ${ARK_API_KEY}`
     },
     body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
+      model: DOUBAO_MODEL,
       messages: [
         { role: "system", content: systemInstruction(operation) },
-        { role: "user", content: prompt }
+        { role: "user", content: userContent }
       ],
       temperature: 0.85,
       max_tokens: 650,
@@ -134,11 +152,18 @@ async function callDeepSeek(operation, prompt) {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`DeepSeek ${response.status}: ${text}`);
+    throw new Error(`Doubao ${response.status}: ${text}`);
   }
 
   const json = await response.json();
   return json?.choices?.[0]?.message?.content || "{}";
+}
+
+function safeImageMimeType(value) {
+  if (value === "image/png" || value === "image/webp" || value === "image/jpeg") {
+    return value;
+  }
+  return "image/jpeg";
 }
 
 function systemInstruction(operation) {

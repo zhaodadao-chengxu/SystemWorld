@@ -184,7 +184,7 @@ final class SystemStore: ObservableObject {
 {"passed": true或false, "feedback": "有趣的评价反馈（20-40字）"}
 """
 
-        if let json = await askAI(operation: "reviewTask", prompt: prompt),
+        if let json = await askAI(operation: "reviewTask", prompt: prompt, imageData: imageData),
            let data = cleanedJSON(json).data(using: .utf8),
            let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             let passed = dict["passed"] as? Bool ?? true
@@ -233,18 +233,23 @@ final class SystemStore: ObservableObject {
             finishHallReview(hallTask, passed: false, feedback: "证明内容不适合提交，请换一种更清楚的描述。")
             return
         }
+        if let imageData, imageData.count > 4_000_000 {
+            finishHallReview(hallTask, passed: false, feedback: "图片太大了，请换一张更小的证明图。")
+            return
+        }
 
         isLoading = true; defer { isLoading = false }
 
+        let hasImage = imageData != nil ? "（宿主附带了图片证明，请结合图片判断）" : ""
         let prompt = """
 你是"\(sys.name)"系统。宿主完成了一个从大厅接的任务：
 任务：\(hallTask.title)
 描述：\(hallTask.description)
-证明：\(proof)
+证明：\(proof)\(hasImage)
 评估完成情况。输出JSON：{"passed":true/false, "feedback":"评价"}
 """
 
-        if let json = await askAI(operation: "reviewHallTask", prompt: prompt),
+        if let json = await askAI(operation: "reviewHallTask", prompt: prompt, imageData: imageData),
            let data = cleanedJSON(json).data(using: .utf8),
            let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             let passed = dict["passed"] as? Bool ?? true
@@ -294,12 +299,16 @@ final class SystemStore: ObservableObject {
     }
 
     // MARK: - AI Backend
-    private func askAI(operation: String, prompt: String) async -> String? {
-        let body: [String: Any] = [
+    private func askAI(operation: String, prompt: String, imageData: Data? = nil) async -> String? {
+        var body: [String: Any] = [
             "operation": operation,
             "prompt": prompt,
             "schemaVersion": 1
         ]
+        if let imageData {
+            body["imageBase64"] = imageData.base64EncodedString()
+            body["imageMimeType"] = imageMimeType(for: imageData)
+        }
 
         for url in aiBackendURLs {
             var req = URLRequest(url: url)
@@ -322,6 +331,16 @@ final class SystemStore: ObservableObject {
             }
         }
         return nil
+    }
+
+    private func imageMimeType(for data: Data) -> String {
+        if data.starts(with: [0x89, 0x50, 0x4E, 0x47]) {
+            return "image/png"
+        }
+        if data.starts(with: [0x52, 0x49, 0x46, 0x46]) {
+            return "image/webp"
+        }
+        return "image/jpeg"
     }
 
     private func parseSystem(from json: String) -> NovelSystem? {

@@ -10,7 +10,7 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 22
-      - key: DEEPSEEK_MODEL
-        value: deepseek-v4-flash
-      - key: DEEPSEEK_API_KEY
+      - key: DOUBAO_MODEL
+        value: doubao-seed-1-6-vision-250815
+      - key: ARK_API_KEY
         sync: false
