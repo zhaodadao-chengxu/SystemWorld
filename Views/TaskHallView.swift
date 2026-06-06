@@ -1,9 +1,12 @@
 import SwiftUI
+import PhotosUI
 
 struct TaskHallView: View {
     @EnvironmentObject var store: SystemStore
     @State private var showAcceptConfirm: SharedTask?
     @State private var hallProof = ""
+    @State private var selectedHallPhoto: PhotosPickerItem?
+    @State private var hallProofImageData: Data?
     @State private var showCompleteSheet = false
     @State private var selectedScope = 0
 
@@ -279,13 +282,51 @@ struct TaskHallView: View {
                                 }
                             }
 
+                            ClayCard {
+                                VStack(alignment: .leading, spacing: DesignTokens.Spacing.sm) {
+                                    Text("图片证明")
+                                        .font(DesignTokens.Typography.caption.weight(.semibold))
+                                        .foregroundColor(DesignTokens.ColorTokens.textPrimary)
+                                    PhotosPicker(selection: $selectedHallPhoto, matching: .images) {
+                                        HStack {
+                                            Image(systemName: hallProofImageData == nil ? "photo.badge.plus" : "photo.fill")
+                                            Text(hallProofImageData == nil ? "选择图片，可选" : "已选择图片")
+                                            Spacer()
+                                            if hallProofImageData != nil { Image(systemName: "checkmark.circle.fill") }
+                                        }
+                                        .font(DesignTokens.Typography.subheadline.weight(.semibold))
+                                        .foregroundColor(hallProofImageData == nil ? DesignTokens.ColorTokens.primary : DesignTokens.ColorTokens.success)
+                                        .padding(DesignTokens.Spacing.md)
+                                        .background(DesignTokens.ColorTokens.background)
+                                        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
+                                    }
+                                    .onChange(of: selectedHallPhoto) { _, item in
+                                        Task {
+                                            if let data = try? await item?.loadTransferable(type: Data.self) {
+                                                hallProofImageData = data
+                                            }
+                                        }
+                                    }
+                                    if hallProofImageData != nil {
+                                        Button("清除图片") {
+                                            selectedHallPhoto = nil
+                                            hallProofImageData = nil
+                                        }
+                                        .font(DesignTokens.Typography.caption)
+                                        .foregroundColor(DesignTokens.ColorTokens.destructive)
+                                    }
+                                }
+                            }
+
                             ClayButton(
                                 title: "提交审核",
                                 icon: "checkmark.seal.fill",
                                 action: {
                                     Task {
-                                        await store.completeHallTask(proof: hallProof)
+                                        await store.completeHallTask(proof: hallProof, imageData: hallProofImageData)
                                         hallProof = ""
+                                        selectedHallPhoto = nil
+                                        hallProofImageData = nil
                                         showCompleteSheet = false
                                     }
                                 },
@@ -303,6 +344,8 @@ struct TaskHallView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") {
                         hallProof = ""
+                        selectedHallPhoto = nil
+                        hallProofImageData = nil
                         showCompleteSheet = false
                     }
                 }

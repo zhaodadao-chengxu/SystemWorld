@@ -32,7 +32,7 @@ final class SystemStore: ObservableObject {
 
     private var aiBackendURLs: [URL] {
         #if DEBUG
-        [productionAIBackendURL, localAIBackendURL]
+        [localAIBackendURL, productionAIBackendURL]
         #else
         [productionAIBackendURL]
         #endif
@@ -317,7 +317,7 @@ final class SystemStore: ObservableObject {
             var req = URLRequest(url: url)
             req.httpMethod = "POST"
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.timeoutInterval = 35
+            req.timeoutInterval = 18
             req.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
             do {

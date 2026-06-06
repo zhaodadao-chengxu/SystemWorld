@@ -30,7 +30,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (!ARK_API_KEY) {
-      return sendJSON(res, 503, { error: "ARK_API_KEY is not configured" });
+      return sendJSON(res, 503, { error: "豆包 API Key 未配置" });
     }
 
     const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";

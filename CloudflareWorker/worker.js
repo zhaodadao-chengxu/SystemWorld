@@ -24,7 +24,7 @@ export default {
       }
 
       if (!env.ARK_API_KEY) {
-        return sendJSON(503, { error: "ARK_API_KEY is not configured" });
+        return sendJSON(503, { error: "豆包 API Key 未配置" });
       }
 
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
