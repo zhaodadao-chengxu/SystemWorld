@@ -26,7 +26,7 @@ final class SystemStore: ObservableObject {
     private let reviewQuotaCountKey = "system_world_review_quota_count_v1"
     private let maxDailyTasks = 5
     private let maxDailyReviews = 10
-    private let productionAIBackendURL = URL(string: "https://systemworld-ai-zhaodadao.onrender.com/api/ai")!
+    private let productionAIBackendURL = URL(string: "https://systemworld-ai-zhaodadao.420987231.workers.dev/api/ai")!
     private let localAIBackendURL = URL(string: "http://127.0.0.1:8787/api/ai")!
 
     private var aiBackendURLs: [URL] {

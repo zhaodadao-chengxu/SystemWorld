@@ -20,5 +20,5 @@ POST /api/ai
 The iOS app should call:
 
 ```text
-https://systemworld-ai-zhaodadao.<your-cloudflare-subdomain>.workers.dev/api/ai
+https://systemworld-ai-zhaodadao.420987231.workers.dev/api/ai
 ```

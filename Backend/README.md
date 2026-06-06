@@ -1,6 +1,6 @@
-# SystemWorld AI Backend
+# SystemWorld Render Backend
 
-This small backend keeps the Volcengine Ark API key off the iOS client and lets Doubao review proof images.
+This is the optional Render version of the backend. The live app currently uses the Cloudflare Worker backend because it does not require adding a payment card.
 
 ## Run
 
@@ -9,7 +9,9 @@ cd Backend
 npm start
 ```
 
-The iOS app calls:
+The live iOS app calls the Cloudflare Worker URL documented in `CloudflareWorker/README.md`.
+
+If you choose to use Render later, point the iOS app to:
 
 ```text
 https://systemworld-ai-zhaodadao.onrender.com/api/ai
