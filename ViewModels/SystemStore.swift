@@ -28,6 +28,7 @@ final class SystemStore: ObservableObject {
     private let maxDailyReviews = 10
     private let productionAIBackendURL = URL(string: "https://systemworld-ai-zhaodadao.420987231.workers.dev/api/ai")!
     private let localAIBackendURL = URL(string: "http://127.0.0.1:8787/api/ai")!
+    private var lastAIErrorMessage: String?
 
     private var aiBackendURLs: [URL] {
         #if DEBUG
@@ -80,7 +81,7 @@ final class SystemStore: ObservableObject {
             }
         } else {
             useFallbackSystem()
-            notify("AI 服务暂时不可用，已为你绑定一个本地系统。")
+            notify(aiUnavailableMessage(fallback: "已为你绑定一个本地系统。"))
         }
     }
 
@@ -149,7 +150,7 @@ final class SystemStore: ObservableObject {
             generatedTask = task
         } else {
             generatedTask = fallbackTask(for: sys.name)
-            notify("AI 服务暂时不可用，已为你生成一个本地任务。")
+            notify(aiUnavailableMessage(fallback: "已为你生成一个本地任务。"))
         }
 
         userData.tasks.insert(generatedTask, at: 0)
@@ -300,6 +301,8 @@ final class SystemStore: ObservableObject {
 
     // MARK: - AI Backend
     private func askAI(operation: String, prompt: String, imageData: Data? = nil) async -> String? {
+        lastAIErrorMessage = nil
+
         var body: [String: Any] = [
             "operation": operation,
             "prompt": prompt,
@@ -320,17 +323,43 @@ final class SystemStore: ObservableObject {
             do {
                 let (data, response) = try await URLSession.shared.data(for: req)
                 guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                    let message = parseAIError(from: data, response: response)
+                    lastAIErrorMessage = message
+                    print("AI backend rejected request: \(message)")
                     continue
                 }
                 if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let content = json["content"] as? String {
                     return content
                 }
+                lastAIErrorMessage = "AI 返回内容格式异常"
             } catch {
+                lastAIErrorMessage = "网络连接失败"
                 print("AI backend error at \(url.host ?? "unknown"): \(error)")
             }
         }
         return nil
+    }
+
+    private func parseAIError(from data: Data, response: URLResponse) -> String {
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let error = json["error"] as? String,
+           !error.isEmpty {
+            return error
+        }
+
+        if let http = response as? HTTPURLResponse {
+            return "AI 后端返回错误 \(http.statusCode)"
+        }
+
+        return "AI 后端没有响应"
+    }
+
+    private func aiUnavailableMessage(fallback: String) -> String {
+        if let lastAIErrorMessage, !lastAIErrorMessage.isEmpty {
+            return "AI 服务暂时不可用：\(lastAIErrorMessage)。\(fallback)"
+        }
+        return "AI 服务暂时不可用，\(fallback)"
     }
 
     private func imageMimeType(for data: Data) -> String {

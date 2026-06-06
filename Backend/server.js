@@ -60,7 +60,7 @@ const server = http.createServer(async (req, res) => {
     return sendJSON(res, 200, { content });
   } catch (error) {
     console.error(error);
-    return sendJSON(res, 500, { error: "AI backend failed" });
+    return sendJSON(res, 502, { error: friendlyErrorMessage(error) });
   }
 });
 
@@ -145,8 +145,7 @@ async function callDoubao(operation, prompt, imageBase64, imageMimeType) {
         { role: "user", content: userContent }
       ],
       temperature: 0.85,
-      max_tokens: 650,
-      response_format: { type: "json_object" }
+      max_tokens: 650
     })
   });
 
@@ -157,6 +156,26 @@ async function callDoubao(operation, prompt, imageBase64, imageMimeType) {
 
   const json = await response.json();
   return json?.choices?.[0]?.message?.content || "{}";
+}
+
+function friendlyErrorMessage(error) {
+  const message = String(error?.message || "");
+  if (message.includes("401") || message.includes("Unauthorized")) {
+    return "豆包 API Key 无效或没有权限";
+  }
+  if (message.includes("403")) {
+    return "豆包服务没有开通权限或额度未启用";
+  }
+  if (message.includes("404") || message.includes("model")) {
+    return "豆包模型名称不可用，请检查模型 ID";
+  }
+  if (message.includes("429")) {
+    return "豆包请求太频繁或额度不足";
+  }
+  if (message.includes("400")) {
+    return "豆包不接受这次请求参数，后端已记录详细错误";
+  }
+  return "AI 后端调用豆包失败";
 }
 
 function safeImageMimeType(value) {
