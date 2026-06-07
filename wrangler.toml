@@ -3,4 +3,4 @@ main = "CloudflareWorker/worker.js"
 compatibility_date = "2026-06-06"
 
 [vars]
-DOUBAO_MODEL = "doubao-seed-2-0-lite-260215"
+DOUBAO_MODEL = "doubao-seed-2-0-lite-260428"

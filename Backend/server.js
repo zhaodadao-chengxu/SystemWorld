@@ -6,8 +6,8 @@ loadEnv();
 
 const PORT = Number(process.env.PORT || 8787);
 const ARK_API_KEY = process.env.ARK_API_KEY;
-const DOUBAO_MODEL = process.env.DOUBAO_MODEL || "doubao-seed-2-0-lite-260215";
-const ARK_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
+const DOUBAO_MODEL = process.env.DOUBAO_MODEL || "doubao-seed-2-0-lite-260428";
+const ARK_URL = "https://ark.cn-beijing.volces.com/api/v3/responses";
 const FALLBACK_DOUBAO_MODELS = [
   "doubao-seed-1-6-vision-250815"
 ];
@@ -24,6 +24,7 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         service: "SystemWorld AI Backend",
         models: doubaoModels(),
+        api: "responses",
         hasKey: Boolean(ARK_API_KEY)
       });
     }
@@ -125,15 +126,15 @@ function readJSON(req) {
 async function callDoubao(operation, prompt, imageBase64, imageMimeType) {
   const userContent = imageBase64
     ? [
-        { type: "text", text: prompt },
+        { type: "input_text", text: prompt },
         {
-          type: "image_url",
-          image_url: {
-            url: `data:${safeImageMimeType(imageMimeType)};base64,${imageBase64}`
-          }
+          type: "input_image",
+          image_url: `data:${safeImageMimeType(imageMimeType)};base64,${imageBase64}`
         }
       ]
-    : prompt;
+    : [
+        { type: "input_text", text: prompt }
+      ];
 
   let lastError;
   for (const model of doubaoModels()) {
@@ -159,12 +160,15 @@ async function callDoubaoModel(model, operation, userContent) {
     },
     body: JSON.stringify({
       model,
-      messages: [
-        { role: "system", content: systemInstruction(operation) },
-        { role: "user", content: userContent }
+      input: [
+        {
+          role: "user",
+          content: userContent
+        }
       ],
+      instructions: systemInstruction(operation),
       temperature: 0.85,
-      max_tokens: 650
+      max_output_tokens: 650
     })
   });
 
@@ -174,7 +178,7 @@ async function callDoubaoModel(model, operation, userContent) {
   }
 
   const json = await response.json();
-  return json?.choices?.[0]?.message?.content || "{}";
+  return extractResponseText(json);
 }
 
 function doubaoModels() {
@@ -186,6 +190,24 @@ function doubaoModels() {
 function isModelUnavailableError(error) {
   const message = String(error?.message || "").toLowerCase();
   return message.includes("model") || message.includes("not found") || message.includes("404");
+}
+
+function extractResponseText(json) {
+  if (typeof json?.output_text === "string" && json.output_text.trim()) {
+    return json.output_text;
+  }
+
+  const output = Array.isArray(json?.output) ? json.output : [];
+  for (const item of output) {
+    const content = Array.isArray(item?.content) ? item.content : [];
+    for (const part of content) {
+      if (typeof part?.text === "string" && part.text.trim()) {
+        return part.text;
+      }
+    }
+  }
+
+  return json?.choices?.[0]?.message?.content || "{}";
 }
 
 function friendlyErrorMessage(error) {

@@ -1,4 +1,4 @@
-const ARK_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
+const ARK_URL = "https://ark.cn-beijing.volces.com/api/v3/responses";
 const RATE_WINDOW_MS = 60_000;
 const RATE_LIMIT = 60;
 const MAX_PROMPT_LENGTH = 4_000;
@@ -18,6 +18,7 @@ export default {
           service: "SystemWorld AI Backend",
           platform: "Cloudflare Workers",
           models: doubaoModels(env),
+          api: "responses",
           hasKey: Boolean(env.ARK_API_KEY)
         });
       }
@@ -65,15 +66,15 @@ export default {
 async function callDoubao(env, operation, prompt, imageBase64, imageMimeType) {
   const userContent = imageBase64
     ? [
-        { type: "text", text: prompt },
+        { type: "input_text", text: prompt },
         {
-          type: "image_url",
-          image_url: {
-            url: `data:${safeImageMimeType(imageMimeType)};base64,${imageBase64}`
-          }
+          type: "input_image",
+          image_url: `data:${safeImageMimeType(imageMimeType)};base64,${imageBase64}`
         }
       ]
-    : prompt;
+    : [
+        { type: "input_text", text: prompt }
+      ];
 
   let lastError;
   for (const model of doubaoModels(env)) {
@@ -99,12 +100,15 @@ async function callDoubaoModel(env, model, operation, userContent) {
     },
     body: JSON.stringify({
       model,
-      messages: [
-        { role: "system", content: systemInstruction(operation) },
-        { role: "user", content: userContent }
+      input: [
+        {
+          role: "user",
+          content: userContent
+        }
       ],
+      instructions: systemInstruction(operation),
       temperature: 0.85,
-      max_tokens: 650
+      max_output_tokens: 650
     })
   });
 
@@ -114,14 +118,32 @@ async function callDoubaoModel(env, model, operation, userContent) {
   }
 
   const json = await response.json();
-  return json?.choices?.[0]?.message?.content || "{}";
+  return extractResponseText(json);
 }
 
 function doubaoModels(env) {
-  const primary = env.DOUBAO_MODEL || "doubao-seed-2-0-lite-260215";
+  const primary = env.DOUBAO_MODEL || "doubao-seed-2-0-lite-260428";
   return [primary, ...FALLBACK_DOUBAO_MODELS].filter((model, index, models) => {
     return model && models.indexOf(model) === index;
   });
+}
+
+function extractResponseText(json) {
+  if (typeof json?.output_text === "string" && json.output_text.trim()) {
+    return json.output_text;
+  }
+
+  const output = Array.isArray(json?.output) ? json.output : [];
+  for (const item of output) {
+    const content = Array.isArray(item?.content) ? item.content : [];
+    for (const part of content) {
+      if (typeof part?.text === "string" && part.text.trim()) {
+        return part.text;
+      }
+    }
+  }
+
+  return json?.choices?.[0]?.message?.content || "{}";
 }
 
 function isModelUnavailableError(error) {
