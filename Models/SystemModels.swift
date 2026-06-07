@@ -33,13 +33,13 @@ struct SystemTask: Identifiable, Codable {
     var status: TaskStatus
     let systemName: String
     let createdAt: Date
-    let deadline: Date?
+    var deadline: Date?
     var proofText: String?
     var proofImageData: Data?  // 图片证明
     var aiFeedback: String?
     var isPublishedToHall: Bool = false  // 是否发布到大厅
 
-    enum TaskStatus: String, Codable { case pending, submitted, completed, failed }
+    enum TaskStatus: String, Codable { case pending, submitted, completed, failed, expired }
 
     init(id: UUID = UUID(), title: String, desc: String, diff: Int, coins: Int, exp: Int, systemName: String, deadline: Date? = nil) {
         self.id = id; self.title = title; self.description = desc; self.difficulty = diff
@@ -129,7 +129,9 @@ struct SystemUserData: Codable {
     var coins: Int = 0
     var systemName: String = "未绑定"
     var lastTaskDate: String = ""
+    var lastTaskClaimAt: Date? = nil
     var rerollCount: Int = 0
+    var lastRerollDate: String = ""
     var interactionLog: [String] = []
 
     // 大厅相关

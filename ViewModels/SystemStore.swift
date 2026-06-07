@@ -26,6 +26,8 @@ final class SystemStore: ObservableObject {
     private let reviewQuotaCountKey = "system_world_review_quota_count_v1"
     private let maxDailyTasks = 5
     private let maxDailyReviews = 10
+    private let taskCooldown: TimeInterval = 30 * 60
+    private let maxDailyRerolls = 3
     private let productionAIBackendURL = URL(string: "https://systemworld-ai-zhaodadao.420987231.workers.dev/api/ai")!
     private let localAIBackendURL = URL(string: "http://127.0.0.1:8787/api/ai")!
     private var lastAIErrorMessage: String?
@@ -42,7 +44,11 @@ final class SystemStore: ObservableObject {
         true
     }
 
-    init() { load(); loadHall() }
+    init() {
+        load()
+        loadHall()
+        expireOverdueTasks()
+    }
 
     // MARK: - 随机获得系统
     func generateSystem() async {
@@ -104,9 +110,32 @@ final class SystemStore: ObservableObject {
     }
 
     // MARK: - 重新随机系统（清除旧任务）
+    var rerollCost: Int {
+        min(150, 30 + currentRerollCount * 20)
+    }
+
+    var remainingRerollsToday: Int {
+        max(0, maxDailyRerolls - currentRerollCount)
+    }
+
+    var canRerollSystem: Bool {
+        remainingRerollsToday > 0 && userData.coins >= rerollCost && !isLoading
+    }
+
     func rerollSystem() async {
-        // 先完成已发布的大厅任务（不删除，只是标记）
-        userData.rerollCount += 1
+        refreshRerollWindow()
+        guard remainingRerollsToday > 0 else {
+            notify("今日重随次数已用完，明天再换一个系统。")
+            return
+        }
+        guard userData.coins >= rerollCost else {
+            notify("系统币不足，重随需要 \(rerollCost) 币。")
+            return
+        }
+
+        userData.coins -= rerollCost
+        userData.rerollCount = currentRerollCount + 1
+        userData.lastRerollDate = Self.dateKey(Date())
         userData.tasks.removeAll()       // ✅ 清除所有旧任务
         userData.currentSystem = nil
         userData.systemName = "未绑定"
@@ -115,15 +144,46 @@ final class SystemStore: ObservableObject {
     }
 
     // MARK: - 生成任务
+    var activeTask: SystemTask? {
+        expireOverdueTasks()
+        return userData.tasks.first { $0.status == .pending || $0.status == .submitted }
+    }
+
     var canGenerateTask: Bool {
-        userData.lastTaskDate != Self.dateKey(Date())
-        || userData.tasks.filter({ Calendar.current.isDateInToday($0.createdAt) }).count < maxDailyTasks
+        expireOverdueTasks()
+        guard activeTask == nil else { return false }
+        guard userData.tasks.filter({ Calendar.current.isDateInToday($0.createdAt) }).count < maxDailyTasks else { return false }
+        if latestTaskAllowsImmediateClaim { return true }
+        guard let last = userData.lastTaskClaimAt else { return true }
+        return Date().timeIntervalSince(last) >= taskCooldown
+    }
+
+    var taskClaimCooldownRemaining: TimeInterval {
+        expireOverdueTasks()
+        if activeTask != nil || latestTaskAllowsImmediateClaim { return 0 }
+        guard let last = userData.lastTaskClaimAt else { return 0 }
+        return max(0, taskCooldown - Date().timeIntervalSince(last))
+    }
+
+    var taskClaimBlockReason: String? {
+        expireOverdueTasks()
+        if let activeTask {
+            return "先完成或等「\(activeTask.title)」失效后，再领取新任务。"
+        }
+        if userData.tasks.filter({ Calendar.current.isDateInToday($0.createdAt) }).count >= maxDailyTasks {
+            return "今天最多领取 \(maxDailyTasks) 个任务，明天再继续修炼。"
+        }
+        let remaining = taskClaimCooldownRemaining
+        if remaining > 0 {
+            return "领取冷却中，还需 \(Self.durationText(remaining))。完成当前任务可立刻再领。"
+        }
+        return nil
     }
 
     func generateTask() async {
         guard let sys = userData.currentSystem else { return }
         guard canGenerateTask else {
-            notify("今天最多领取 \(maxDailyTasks) 个任务，明天再继续修炼。")
+            notify(taskClaimBlockReason ?? "暂时不能领取新任务。")
             return
         }
         isLoading = true; defer { isLoading = false }
@@ -131,12 +191,13 @@ final class SystemStore: ObservableObject {
         let level = UserLevel.levelFor(exp: userData.totalExp)
         let prompt = """
 你是"\(sys.name)"系统（\(sys.personality)性格），宿主当前等级：\(level.name)。
-请以系统的口气，给宿主发布一个有趣的日常任务。
+系统类型：\(sys.type)。系统专长：\(sys.specialty)。系统自我介绍：\(sys.intro)
+请以这个系统的口气发布一个高度匹配系统设定的现实任务，任务必须和系统类型、专长或性格强相关，不能泛泛而谈，不能叫"日常任务"。
 
 输出纯JSON：
 {
-  "title": "任务标题",
-  "description": "任务描述（以系统的口气，有趣一点，20-50字）",
+  "title": "任务标题（8-18字，带系统风格）",
+  "description": "任务描述（以系统的口气，有趣一点，28-60字，必须说明具体行动）",
   "difficulty": 1-5,
   "rewardCoins": 由App规则决定,
   "rewardExp": 由App规则决定
@@ -155,11 +216,17 @@ final class SystemStore: ObservableObject {
 
         userData.tasks.insert(generatedTask, at: 0)
         userData.lastTaskDate = Self.dateKey(Date())
+        userData.lastTaskClaimAt = Date()
         save()
     }
 
     // MARK: - 提交任务审核（支持图片证明）
     func submitTask(_ task: SystemTask, proof: String, imageData: Data? = nil) async {
+        expireOverdueTasks()
+        guard !isTaskExpired(task) else {
+            finishTaskReview(task, proof: proof, imageData: imageData, passed: false, feedback: "任务倒计时已结束，本次任务失效。")
+            return
+        }
         guard consumeReviewQuota() else {
             finishTaskReview(task, proof: proof, imageData: imageData, passed: false, feedback: "今日审核次数已用完，请明天再提交。")
             return
@@ -389,12 +456,16 @@ final class SystemStore: ObservableObject {
               let d = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         let difficulty = safeDifficulty(d["difficulty"] as? Int)
         let reward = rewardForDifficulty(difficulty)
-        return SystemTask(title: d["title"] as? String ?? "日常任务",
-                          desc: d["description"] as? String ?? "",
+        let title = sanitizedTaskText(d["title"] as? String)
+        let description = sanitizedTaskText(d["description"] as? String)
+        guard title.count >= 4, description.count >= 12, title != "日常任务" else { return nil }
+        return SystemTask(title: title,
+                          desc: description,
                           diff: difficulty,
                           coins: reward.coins,
                           exp: reward.exp,
-                          systemName: systemName)
+                          systemName: systemName,
+                          deadline: Date().addingTimeInterval(taskDuration(for: difficulty)))
     }
 
     private func cleanedJSON(_ raw: String) -> String {
@@ -414,16 +485,9 @@ final class SystemStore: ObservableObject {
 
     private func fallbackTask(for systemName: String) -> SystemTask {
         let candidates = [
-            SystemTask(title: "十分钟专注修炼", desc: "放下干扰，专注完成一件小事十分钟，并记录成果。", diff: 1, coins: 12, exp: 25, systemName: systemName),
-            SystemTask(title: "整理一处现实据点", desc: "整理桌面、房间或文件夹，让你的据点恢复秩序。", diff: 1, coins: 10, exp: 20, systemName: systemName),
-            SystemTask(title: "补充今日能量", desc: "喝水、走动、拉伸任选两项，给身体回一口状态。", diff: 1, coins: 8, exp: 18, systemName: systemName),
-            SystemTask(title: "推进一个拖延任务", desc: "选一个拖着没动的小任务，只推进第一步就算完成。", diff: 2, coins: 16, exp: 35, systemName: systemName),
-            SystemTask(title: "三行复盘", desc: "写下今天已完成、卡住、下一步各一条，让混乱变成地图。", diff: 1, coins: 10, exp: 20, systemName: systemName),
-            SystemTask(title: "轻量社交破冰", desc: "给一个人发出一句真诚消息，可以是感谢、问候或反馈。", diff: 2, coins: 16, exp: 35, systemName: systemName),
-            SystemTask(title: "知识碎片吸收", desc: "读一页书或一篇短文，并记下一个真正有用的观点。", diff: 2, coins: 16, exp: 35, systemName: systemName),
-            SystemTask(title: "身体唤醒", desc: "完成五分钟拉伸或快走，让你的现实肉身重新上线。", diff: 1, coins: 10, exp: 20, systemName: systemName),
-            SystemTask(title: "清掉一个小债务", desc: "处理一个五分钟内能完成的小欠账，例如回复、归档或缴费。", diff: 2, coins: 16, exp: 35, systemName: systemName),
-            SystemTask(title: "勇者模式十五分钟", desc: "选今天最不想碰的一件事，开十五分钟计时，只求启动。", diff: 3, coins: 24, exp: 55, systemName: systemName)
+            fallbackTaskCandidate(title: "\(systemName)专属校准", desc: "按当前系统的口吻，选择一件和它专长相关的小事，专注完成并写下结果。", diff: 1, systemName: systemName),
+            fallbackTaskCandidate(title: "\(systemName)能量回路", desc: "完成一次十分钟行动，把拖延、学习或整理中的一个现实节点推进到可见状态。", diff: 2, systemName: systemName),
+            fallbackTaskCandidate(title: "\(systemName)突破试炼", desc: "挑一个今天最抗拒但有价值的目标，开十五分钟计时，完成第一段推进。", diff: 3, systemName: systemName)
         ]
         return candidates.randomElement()!
     }
@@ -453,6 +517,83 @@ final class SystemStore: ObservableObject {
         lastTaskResult = (task, passed, feedback)
         showTaskFeedback = true
         save()
+    }
+
+    private var currentRerollCount: Int {
+        if userData.lastRerollDate == Self.dateKey(Date()) {
+            return userData.rerollCount
+        }
+        return 0
+    }
+
+    private var latestTaskAllowsImmediateClaim: Bool {
+        guard let latest = userData.tasks.first else { return false }
+        return latest.status == .completed
+    }
+
+    private func refreshRerollWindow() {
+        if userData.lastRerollDate != Self.dateKey(Date()) {
+            userData.rerollCount = 0
+            userData.lastRerollDate = Self.dateKey(Date())
+        }
+    }
+
+    private func expireOverdueTasks() {
+        var changed = false
+        for index in userData.tasks.indices {
+            if userData.tasks[index].deadline == nil,
+               (userData.tasks[index].status == .pending || userData.tasks[index].status == .submitted) {
+                userData.tasks[index].deadline = userData.tasks[index].createdAt.addingTimeInterval(taskDuration(for: userData.tasks[index].difficulty))
+                changed = true
+            }
+            if isTaskExpired(userData.tasks[index]),
+               (userData.tasks[index].status == .pending || userData.tasks[index].status == .submitted) {
+                userData.tasks[index].status = .expired
+                userData.tasks[index].aiFeedback = "倒计时结束，任务已失效。"
+                changed = true
+            }
+        }
+        if changed { save() }
+    }
+
+    private func isTaskExpired(_ task: SystemTask) -> Bool {
+        guard let deadline = task.deadline else { return false }
+        return Date() >= deadline && (task.status == .pending || task.status == .submitted)
+    }
+
+    private func taskDuration(for difficulty: Int) -> TimeInterval {
+        switch safeDifficulty(difficulty) {
+        case 1: return 15 * 60
+        case 2: return 30 * 60
+        case 3: return 60 * 60
+        case 4: return 2 * 60 * 60
+        default: return 4 * 60 * 60
+        }
+    }
+
+    private func fallbackTaskCandidate(title: String, desc: String, diff: Int, systemName: String) -> SystemTask {
+        let reward = rewardForDifficulty(diff)
+        return SystemTask(title: title, desc: desc, diff: diff, coins: reward.coins, exp: reward.exp, systemName: systemName, deadline: Date().addingTimeInterval(taskDuration(for: diff)))
+    }
+
+    private func sanitizedTaskText(_ value: String?) -> String {
+        (value ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\n", with: " ")
+    }
+
+    static func durationText(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds.rounded(.up)))
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        if hours > 0 {
+            return "\(hours)小时\(minutes)分"
+        }
+        if minutes > 0 {
+            return "\(minutes)分\(secs)秒"
+        }
+        return "\(secs)秒"
     }
 
     private func safeDifficulty(_ value: Int?) -> Int {

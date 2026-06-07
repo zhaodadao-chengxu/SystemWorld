@@ -8,6 +8,8 @@ struct SystemHomeView: View {
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var proofImageData: Data?
     @State private var showRerollConfirm = false
+    @State private var now = Date()
+    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
@@ -25,11 +27,14 @@ struct SystemHomeView: View {
         } message: {
             if let lv = store.newLevel { Text("晋升 \(lv.name)，获得 \(lv.fakePower)") }
         }
-        .confirmationDialog("更换系统将清除所有本地任务，确定继续？", isPresented: $showRerollConfirm, titleVisibility: .visible) {
-            Button("确定更换", role: .destructive) {
+        .confirmationDialog("重随系统需要 \(store.rerollCost) 系统币，今日剩余 \(store.remainingRerollsToday) 次。更换会清除当前本地任务。", isPresented: $showRerollConfirm, titleVisibility: .visible) {
+            Button("花费 \(store.rerollCost) 币重随", role: .destructive) {
                 Task { await store.rerollSystem() }
             }
             Button("取消", role: .cancel) {}
+        }
+        .onReceive(ticker) { value in
+            now = value
         }
     }
 
@@ -43,7 +48,7 @@ struct SystemHomeView: View {
                     Text("SystemWorld")
                         .font(DesignTokens.Typography.largeTitle)
                         .foregroundColor(DesignTokens.ColorTokens.textPrimary)
-                    Text("随机觉醒一个专属系统，用日常任务升级你的虚拟修行档案。")
+                    Text("随机觉醒一个专属系统，接受它发布的限时指令来升级你的虚拟修行档案。")
                         .font(DesignTokens.Typography.body)
                         .foregroundColor(DesignTokens.ColorTokens.textSecondary)
                         .multilineTextAlignment(.center)
@@ -68,8 +73,9 @@ struct SystemHomeView: View {
         let sys = store.userData.currentSystem!
         let lv = UserLevel.levelFor(exp: store.userData.totalExp)
 
-        return AppScreen(title: "系统", subtitle: "今日状态、任务和升级进度都在这里。") {
+        return AppScreen(title: "系统", subtitle: "当前绑定、任务倒计时和升级进度。") {
             systemSummary(sys, lv)
+            commandPanel(sys)
             levelProgress(lv)
             taskSection
         }
@@ -80,56 +86,122 @@ struct SystemHomeView: View {
 
     private func systemSummary(_ sys: NovelSystem, _ lv: UserLevel) -> some View {
         SummaryBand {
-            VStack(alignment: .leading, spacing: DesignTokens.Spacing.lg) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.xl) {
+                HStack(alignment: .top, spacing: DesignTokens.Spacing.lg) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.xl)
+                            .fill(.white.opacity(0.16))
+                        Text(sys.icon)
+                            .font(.system(size: 42))
+                    }
+                    .frame(width: 74, height: 74)
+
+                    VStack(alignment: .leading, spacing: DesignTokens.Spacing.sm) {
+                        Text("已绑定主系统")
+                            .font(DesignTokens.Typography.caption.weight(.bold))
+                            .foregroundColor(.white.opacity(0.68))
                         Text(sys.name)
-                            .font(DesignTokens.Typography.title2)
+                            .font(.system(.title, design: .rounded).weight(.black))
                             .foregroundColor(.white)
                             .fixedSize(horizontal: false, vertical: true)
-                        HStack(spacing: DesignTokens.Spacing.sm) {
-                            StarRating(rating: sys.starRating, maxStars: 5)
-                            Text(sys.type)
-                                .font(DesignTokens.Typography.caption.weight(.semibold))
-                                .foregroundColor(.white.opacity(0.78))
-                        }
+                        StarRating(rating: sys.starRating, maxStars: 5, size: 16)
                     }
                     Spacer()
                     Button {
                         showRerollConfirm = true
                     } label: {
-                        Image(systemName: "dice.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 36, height: 36)
-                            .background(.white.opacity(0.16))
-                            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
+                        VStack(spacing: 2) {
+                            Image(systemName: "dice.fill")
+                                .font(.system(size: 15, weight: .semibold))
+                            Text("\(store.rerollCost)币")
+                                .font(DesignTokens.Typography.caption2.weight(.bold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(width: 52, height: 48)
+                        .background(.white.opacity(0.18))
+                        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
                     }
                     .buttonStyle(ClayPressStyle())
                 }
 
-                Text(sys.intro)
-                    .font(DesignTokens.Typography.subheadline)
-                    .foregroundColor(.white.opacity(0.88))
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.sm) {
+                    Text(sys.intro)
+                        .font(DesignTokens.Typography.subheadline.weight(.semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: DesignTokens.Spacing.sm) {
+                        summaryChip(sys.type, icon: "tag.fill")
+                        summaryChip(sys.personality, icon: "theatermasks.fill")
+                        summaryChip(sys.specialty, icon: "scope")
+                    }
+                }
+                .padding(DesignTokens.Spacing.md)
+                .background(.white.opacity(0.11))
+                .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.lg))
 
                 HStack(spacing: DesignTokens.Spacing.sm) {
-                    summaryChip(sys.personality, icon: "theatermasks.fill")
-                    summaryChip(sys.specialty, icon: "scope")
-                    Spacer()
-                    Text("Lv.\(lv.level) \(lv.name)")
-                        .font(DesignTokens.Typography.caption.weight(.bold))
-                        .foregroundColor(.white)
+                    systemMetric("Lv.\(lv.level)", lv.name, icon: "bolt.fill")
+                    systemMetric("\(store.userData.coins)", "系统币", icon: "bitcoinsign.circle.fill")
+                    systemMetric("\(store.remainingRerollsToday)", "今日重随", icon: "arrow.triangle.2.circlepath")
                 }
 
                 ClayButton(
-                    title: store.isLoading ? "生成中" : "领取任务",
+                    title: taskClaimButtonTitle,
                     icon: "plus",
                     action: { Task { await store.generateTask() } },
                     variant: .secondary,
                     isLoading: store.isLoading,
-                    disabled: store.isLoading
+                    disabled: store.isLoading || !store.canGenerateTask
                 )
+            }
+        }
+    }
+
+    private var taskClaimButtonTitle: String {
+        if store.isLoading { return "生成中" }
+        if store.canGenerateTask { return "领取系统任务" }
+        let remaining = store.taskClaimCooldownRemaining
+        if remaining > 0 { return "冷却 \(SystemStore.durationText(remaining))" }
+        return "任务进行中"
+    }
+
+    private func systemMetric(_ value: String, _ label: String, icon: String) -> some View {
+        HStack(spacing: DesignTokens.Spacing.xs) {
+            Image(systemName: icon).font(.system(size: 12, weight: .semibold))
+            VStack(alignment: .leading, spacing: 0) {
+                Text(value).font(DesignTokens.Typography.caption.weight(.bold))
+                Text(label).font(DesignTokens.Typography.caption2)
+            }
+        }
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, DesignTokens.Spacing.sm)
+        .frame(height: 42)
+        .background(.white.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
+    }
+
+    private func commandPanel(_ sys: NovelSystem) -> some View {
+        ClayCard(cornerRadius: DesignTokens.Radius.lg, padding: DesignTokens.Spacing.md) {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
+                HStack {
+                    Label("系统指令", systemImage: "terminal.fill")
+                        .font(DesignTokens.Typography.headline)
+                        .foregroundColor(DesignTokens.ColorTokens.textPrimary)
+                    Spacer()
+                    StatusChip(text: sys.type, icon: "sparkles", color: DesignTokens.ColorTokens.primary)
+                }
+                HStack(spacing: DesignTokens.Spacing.sm) {
+                    MetricTile(value: "\(store.userData.tasks.filter { Calendar.current.isDateInToday($0.createdAt) }.count)/5", label: "今日任务", icon: "list.bullet.clipboard.fill", color: DesignTokens.ColorTokens.primary)
+                    MetricTile(value: store.activeTask == nil ? "空闲" : "执行中", label: "任务槽", icon: "timer", color: store.activeTask == nil ? DesignTokens.ColorTokens.success : DesignTokens.ColorTokens.warning)
+                    MetricTile(value: store.taskClaimCooldownRemaining > 0 ? SystemStore.durationText(store.taskClaimCooldownRemaining) : "可领取", label: "冷却", icon: "hourglass", color: DesignTokens.ColorTokens.accent)
+                }
+                if let reason = store.taskClaimBlockReason {
+                    Text(reason)
+                        .font(DesignTokens.Typography.caption)
+                        .foregroundColor(DesignTokens.ColorTokens.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
@@ -222,7 +294,7 @@ struct SystemHomeView: View {
                                 .foregroundColor(DesignTokens.ColorTokens.textPrimary)
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer()
-                            StatusChip(text: taskStatusText(task.status), icon: taskStatusIcon(task.status), color: taskStatusColor(task.status))
+                            StatusChip(text: taskStatusText(task), icon: taskStatusIcon(task.status), color: taskStatusColor(task.status))
                         }
 
                         Text(task.aiFeedback ?? task.description)
@@ -231,6 +303,7 @@ struct SystemHomeView: View {
                             .fixedSize(horizontal: false, vertical: true)
 
                         HStack(spacing: DesignTokens.Spacing.sm) {
+                            Label("难度\(task.difficulty)", systemImage: "flame.fill")
                             Label("\(task.rewardCoins)币", systemImage: "bitcoinsign.circle.fill")
                             Label("\(task.rewardExp)经验", systemImage: "bolt.fill")
                             if task.isPublishedToHall {
@@ -249,12 +322,17 @@ struct SystemHomeView: View {
         }
     }
 
-    private func taskStatusText(_ status: SystemTask.TaskStatus) -> String {
-        switch status {
-        case .pending: return "待提交"
+    private func taskStatusText(_ task: SystemTask) -> String {
+        switch task.status {
+        case .pending:
+            if let deadline = task.deadline {
+                return "剩 \(SystemStore.durationText(deadline.timeIntervalSince(now)))"
+            }
+            return "待提交"
         case .submitted: return "审核中"
         case .completed: return "完成"
         case .failed: return "未通过"
+        case .expired: return "已失效"
         }
     }
 
@@ -264,6 +342,7 @@ struct SystemHomeView: View {
         case .submitted: return DesignTokens.ColorTokens.accent
         case .completed: return DesignTokens.ColorTokens.success
         case .failed: return DesignTokens.ColorTokens.destructive
+        case .expired: return DesignTokens.ColorTokens.textMuted
         }
     }
 
@@ -273,6 +352,7 @@ struct SystemHomeView: View {
         case .submitted: return "hourglass"
         case .completed: return "checkmark.seal.fill"
         case .failed: return "xmark.seal.fill"
+        case .expired: return "clock.badge.xmark.fill"
         }
     }
 
