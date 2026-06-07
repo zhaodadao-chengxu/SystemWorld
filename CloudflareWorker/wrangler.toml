@@ -1,0 +1,6 @@
+name = "systemworld-ai-zhaodadao"
+main = "worker.js"
+compatibility_date = "2026-06-07"
+
+[observability]
+enabled = true

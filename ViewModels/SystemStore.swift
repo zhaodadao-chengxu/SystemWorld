@@ -28,15 +28,16 @@ final class SystemStore: ObservableObject {
     private let maxDailyReviews = 10
     private let taskCooldown: TimeInterval = 30 * 60
     private let maxDailyRerolls = 3
-    private let productionAIBackendURL = URL(string: "https://systemworld-ai-zhaodadao.420987231.workers.dev/api/ai")!
+    private let renderAIBackendURL = URL(string: "https://systemworld-ai-zhaodadao.onrender.com/api/ai")!
+    private let cloudflareAIBackendURL = URL(string: "https://systemworld-ai-zhaodadao.420987231.workers.dev/api/ai")!
     private let localAIBackendURL = URL(string: "http://127.0.0.1:8787/api/ai")!
     private var lastAIErrorMessage: String?
 
     private var aiBackendURLs: [URL] {
         #if DEBUG
-        [localAIBackendURL, productionAIBackendURL]
+        [localAIBackendURL, renderAIBackendURL, cloudflareAIBackendURL]
         #else
-        [productionAIBackendURL]
+        [renderAIBackendURL, cloudflareAIBackendURL]
         #endif
     }
 
@@ -424,9 +425,9 @@ final class SystemStore: ObservableObject {
 
     private func aiUnavailableMessage(fallback: String) -> String {
         if let lastAIErrorMessage, !lastAIErrorMessage.isEmpty {
-            return "AI 服务暂时不可用：\(lastAIErrorMessage)。\(fallback)"
+            return "联网 AI 暂时连不上：\(lastAIErrorMessage)。\(fallback)"
         }
-        return "AI 服务暂时不可用，\(fallback)"
+        return "联网 AI 暂时连不上，\(fallback)"
     }
 
     private func imageMimeType(for data: Data) -> String {

@@ -8,6 +8,7 @@ const PORT = Number(process.env.PORT || 8787);
 const ARK_API_KEY = process.env.ARK_API_KEY;
 const DOUBAO_MODEL = process.env.DOUBAO_MODEL || "doubao-seed-2-0-lite-260428";
 const ARK_URL = "https://ark.cn-beijing.volces.com/api/v3/responses";
+const ARK_TIMEOUT_MS = 25_000;
 const FALLBACK_DOUBAO_MODELS = [
   "doubao-seed-1-6-vision-250815"
 ];
@@ -19,10 +20,11 @@ const MAX_PROMPT_LENGTH = 4_000;
 
 const server = http.createServer(async (req, res) => {
   try {
-    if (req.method === "GET" && req.url === "/health") {
+    if (req.method === "GET" && (req.url === "/" || req.url === "/health")) {
       return sendJSON(res, 200, {
         ok: true,
         service: "SystemWorld AI Backend",
+        platform: "Render",
         models: doubaoModels(),
         api: "responses",
         hasKey: Boolean(ARK_API_KEY)
@@ -152,7 +154,7 @@ async function callDoubao(operation, prompt, imageBase64, imageMimeType) {
 }
 
 async function callDoubaoModel(model, operation, userContent) {
-  const response = await fetch(ARK_URL, {
+  const response = await fetchWithTimeout(ARK_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -170,7 +172,7 @@ async function callDoubaoModel(model, operation, userContent) {
       temperature: 0.85,
       max_output_tokens: 650
     })
-  });
+  }, ARK_TIMEOUT_MS);
 
   if (!response.ok) {
     const text = await response.text();
@@ -179,6 +181,21 @@ async function callDoubaoModel(model, operation, userContent) {
 
   const json = await response.json();
   return extractResponseText(json);
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort("timeout"), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError" || String(error?.message || "").includes("timeout")) {
+      throw new Error("Doubao request timeout");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function doubaoModels() {
@@ -223,6 +240,9 @@ function friendlyErrorMessage(error) {
   }
   if (message.includes("429")) {
     return "豆包请求太频繁或额度不足";
+  }
+  if (message.toLowerCase().includes("timeout")) {
+    return "豆包响应超时，请稍后再试";
   }
   if (message.includes("400")) {
     return "豆包不接受这次请求参数，后端已记录详细错误";
