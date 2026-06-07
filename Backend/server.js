@@ -247,9 +247,9 @@ function isTransientNetworkError(error) {
 }
 
 function maxOutputTokens(operation) {
-  if (operation === "generateTask") return 320;
-  if (operation === "generateSystem") return 520;
-  return 420;
+  if (operation === "generateTask") return 650;
+  if (operation === "generateSystem") return 900;
+  return 650;
 }
 
 function extractResponseText(json) {
