@@ -200,12 +200,11 @@ final class SystemStore: ObservableObject {
 {
   "title": "任务标题（8-18字，带系统风格）",
   "description": "任务描述（以系统的口气，有趣一点，28-60字，必须说明具体行动）",
-  "difficulty": 1-5,
-  "rewardCoins": 由App规则决定,
-  "rewardExp": 由App规则决定
+  "difficulty": 1
 }
 
 任务要求：可以在现实生活中完成，运动/学习/社交/助人/自我提升等。有趣不无聊！
+难度只能输出1到5的整数。奖励由App自动计算，不要输出rewardCoins或rewardExp。
 """
 
         let generatedTask: SystemTask
