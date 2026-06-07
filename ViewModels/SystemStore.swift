@@ -29,15 +29,16 @@ final class SystemStore: ObservableObject {
     private let taskCooldown: TimeInterval = 30 * 60
     private let maxDailyRerolls = 3
     private let renderAIBackendURL = URL(string: "https://systemworld-ai-zhaodadao.onrender.com/api/ai")!
+    private let tencentAIBackendURL = URL(string: "http://43.128.42.179/api/ai")!
     private let cloudflareAIBackendURL = URL(string: "https://systemworld-ai-zhaodadao.420987231.workers.dev/api/ai")!
     private let localAIBackendURL = URL(string: "http://127.0.0.1:8787/api/ai")!
     private var lastAIErrorMessage: String?
 
     private var aiBackendURLs: [URL] {
         #if DEBUG
-        [localAIBackendURL, renderAIBackendURL, cloudflareAIBackendURL]
+        [localAIBackendURL, tencentAIBackendURL, renderAIBackendURL, cloudflareAIBackendURL]
         #else
-        [renderAIBackendURL, cloudflareAIBackendURL]
+        [tencentAIBackendURL, renderAIBackendURL, cloudflareAIBackendURL]
         #endif
     }
 
