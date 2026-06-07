@@ -386,7 +386,7 @@ final class SystemStore: ObservableObject {
             var req = URLRequest(url: url)
             req.httpMethod = "POST"
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.timeoutInterval = 18
+            req.timeoutInterval = 55
             req.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
             do {

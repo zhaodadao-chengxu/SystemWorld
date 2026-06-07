@@ -9,7 +9,8 @@ const PORT = Number(process.env.PORT || 8787);
 const ARK_API_KEY = process.env.ARK_API_KEY;
 const DOUBAO_MODEL = process.env.DOUBAO_MODEL || "doubao-seed-2-0-lite-260428";
 const ARK_URL = "https://ark.cn-beijing.volces.com/api/v3/responses";
-const ARK_TIMEOUT_MS = 25_000;
+const ARK_TIMEOUT_MS = 45_000;
+const ARK_RETRY_COUNT = 2;
 const FALLBACK_DOUBAO_MODELS = [
   "doubao-seed-1-6-vision-250815"
 ];
@@ -141,12 +142,18 @@ async function callDoubao(operation, prompt, imageBase64, imageMimeType) {
 
   let lastError;
   for (const model of doubaoModels()) {
-    try {
-      return await callDoubaoModel(model, operation, userContent);
-    } catch (error) {
-      lastError = error;
-      if (!isModelUnavailableError(error)) {
-        throw error;
+    for (let attempt = 1; attempt <= ARK_RETRY_COUNT; attempt += 1) {
+      try {
+        return await callDoubaoModel(model, operation, userContent);
+      } catch (error) {
+        lastError = error;
+        if (isTransientNetworkError(error) && attempt < ARK_RETRY_COUNT) {
+          continue;
+        }
+        if (!isModelUnavailableError(error)) {
+          throw error;
+        }
+        break;
       }
     }
   }
@@ -165,7 +172,7 @@ async function callDoubaoModel(model, operation, userContent) {
     ],
     instructions: systemInstruction(operation),
     temperature: 0.85,
-    max_output_tokens: 650
+    max_output_tokens: maxOutputTokens(operation)
   }, {
     "Authorization": `Bearer ${ARK_API_KEY}`
   }, ARK_TIMEOUT_MS);
@@ -229,6 +236,20 @@ function doubaoModels() {
 function isModelUnavailableError(error) {
   const message = String(error?.message || "").toLowerCase();
   return message.includes("model") || message.includes("not found") || message.includes("404");
+}
+
+function isTransientNetworkError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("timeout") ||
+    message.includes("econnreset") ||
+    message.includes("socket hang up") ||
+    message.includes("network");
+}
+
+function maxOutputTokens(operation) {
+  if (operation === "generateTask") return 320;
+  if (operation === "generateSystem") return 520;
+  return 420;
 }
 
 function extractResponseText(json) {
