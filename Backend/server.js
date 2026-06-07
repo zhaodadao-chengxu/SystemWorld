@@ -191,8 +191,10 @@ function postJSON(urlString, body, headers, timeoutMs) {
       family: 4,
       timeout: timeoutMs,
       headers: {
+        "Accept": "application/json",
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(text),
+        "User-Agent": "SystemWorldAI/1.0",
         ...headers
       }
     }, response => {
@@ -238,6 +240,9 @@ function extractResponseText(json) {
   for (const item of output) {
     const content = Array.isArray(item?.content) ? item.content : [];
     for (const part of content) {
+      if (typeof part?.output_text === "string" && part.output_text.trim()) {
+        return part.output_text;
+      }
       if (typeof part?.text === "string" && part.text.trim()) {
         return part.text;
       }

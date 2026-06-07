@@ -153,6 +153,9 @@ function extractResponseText(json) {
   for (const item of output) {
     const content = Array.isArray(item?.content) ? item.content : [];
     for (const part of content) {
+      if (typeof part?.output_text === "string" && part.output_text.trim()) {
+        return part.output_text;
+      }
       if (typeof part?.text === "string" && part.text.trim()) {
         return part.text;
       }
