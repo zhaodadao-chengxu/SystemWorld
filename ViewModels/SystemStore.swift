@@ -228,16 +228,20 @@ final class SystemStore: ObservableObject {
             finishTaskReview(task, proof: proof, imageData: imageData, passed: false, feedback: "任务倒计时已结束，本次任务失效。")
             return
         }
-        guard consumeReviewQuota() else {
-            finishTaskReview(task, proof: proof, imageData: imageData, passed: false, feedback: "今日审核次数已用完，请明天再提交。")
-            return
-        }
         guard isAllowedUserText(proof) else {
             finishTaskReview(task, proof: proof, imageData: imageData, passed: false, feedback: "证明内容不适合提交，请换一种更清楚的描述。")
             return
         }
         if let imageData, imageData.count > 4_000_000 {
             finishTaskReview(task, proof: proof, imageData: nil, passed: false, feedback: "图片太大了，请换一张更小的证明图。")
+            return
+        }
+        if let reason = proofRejectionReason(proof: proof, title: task.title, description: task.description, hasImage: imageData != nil, strict: false) {
+            finishTaskReview(task, proof: proof, imageData: imageData, passed: false, feedback: reason)
+            return
+        }
+        guard consumeReviewQuota() else {
+            finishTaskReview(task, proof: proof, imageData: imageData, passed: false, feedback: "今日审核次数已用完，请明天再提交。")
             return
         }
         guard let sys = userData.currentSystem else { return }
@@ -249,20 +253,19 @@ final class SystemStore: ObservableObject {
 任务：\(task.title)
 描述：\(task.description)
 宿主文字证明：\(proof)\(hasImage)
-请以系统的口气评估完成情况。输出纯JSON：
-{"passed": true或false, "feedback": "有趣的评价反馈（20-40字）"}
+请严格评估完成情况：证明必须描述具体动作、过程或结果，不能只说"完成了"。如果证据和任务无关或太空泛，passed必须为false。
+输出纯JSON：
+{"passed": false, "feedback": "有趣的评价反馈（20-40字）"}
 """
 
         if let json = await askAI(operation: "reviewTask", prompt: prompt, imageData: imageData),
            let data = cleanedJSON(json).data(using: .utf8),
            let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            let passed = dict["passed"] as? Bool ?? true
-            let feedback = dict["feedback"] as? String ?? "任务完成！"
+            let passed = dict["passed"] as? Bool ?? false
+            let feedback = dict["feedback"] as? String ?? (passed ? "证明有效，任务完成。" : "证明不足，暂不通过。")
             finishTaskReview(task, proof: proof, imageData: imageData, passed: passed, feedback: feedback)
         } else {
-            let passed = proof.trimmingCharacters(in: .whitespacesAndNewlines).count >= 8
-            let feedback = passed ? "审核服务暂时不可用，已按文字证明完成基础审核。" : "证明太短了，补充完成过程后再提交。"
-            finishTaskReview(task, proof: proof, imageData: imageData, passed: passed, feedback: feedback)
+            finishTaskReview(task, proof: proof, imageData: imageData, passed: false, feedback: "联网审核暂时不可用，请稍后再提交；本次不会发放奖励。")
         }
     }
 
@@ -294,16 +297,20 @@ final class SystemStore: ObservableObject {
     func completeHallTask(proof: String, imageData: Data? = nil) async {
         guard let hallTask = userData.acceptedHallTask,
               let sys = userData.currentSystem else { return }
-        guard consumeReviewQuota() else {
-            finishHallReview(hallTask, passed: false, feedback: "今日审核次数已用完，请明天再提交。")
-            return
-        }
         guard isAllowedUserText(proof) else {
             finishHallReview(hallTask, passed: false, feedback: "证明内容不适合提交，请换一种更清楚的描述。")
             return
         }
         if let imageData, imageData.count > 4_000_000 {
             finishHallReview(hallTask, passed: false, feedback: "图片太大了，请换一张更小的证明图。")
+            return
+        }
+        if let reason = proofRejectionReason(proof: proof, title: hallTask.title, description: hallTask.description, hasImage: imageData != nil, strict: true) {
+            finishHallReview(hallTask, passed: false, feedback: reason)
+            return
+        }
+        guard consumeReviewQuota() else {
+            finishHallReview(hallTask, passed: false, feedback: "今日审核次数已用完，请明天再提交。")
             return
         }
 
@@ -315,19 +322,18 @@ final class SystemStore: ObservableObject {
 任务：\(hallTask.title)
 描述：\(hallTask.description)
 证明：\(proof)\(hasImage)
-评估完成情况。输出JSON：{"passed":true/false, "feedback":"评价"}
+请严格评估完成情况：大厅任务涉及他人奖励，证明必须清楚、具体、与任务强相关；空泛描述、无关内容、只说完成了，都必须判false。
+输出JSON：{"passed":false, "feedback":"评价"}
 """
 
         if let json = await askAI(operation: "reviewHallTask", prompt: prompt, imageData: imageData),
            let data = cleanedJSON(json).data(using: .utf8),
            let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            let passed = dict["passed"] as? Bool ?? true
-            let feedback = dict["feedback"] as? String ?? "任务完成！"
+            let passed = dict["passed"] as? Bool ?? false
+            let feedback = dict["feedback"] as? String ?? (passed ? "大厅任务证明有效，奖励已发放。" : "证明不足，暂不通过。")
             finishHallReview(hallTask, passed: passed, feedback: feedback)
         } else {
-            let passed = proof.trimmingCharacters(in: .whitespacesAndNewlines).count >= 8
-            let feedback = passed ? "审核服务暂时不可用，已按文字证明完成基础审核。" : "证明太短了，补充完成过程后再提交。"
-            finishHallReview(hallTask, passed: passed, feedback: feedback)
+            finishHallReview(hallTask, passed: false, feedback: "联网审核暂时不可用，大厅任务不会自动通过，请稍后再提交。")
         }
     }
 
@@ -632,6 +638,46 @@ final class SystemStore: ObservableObject {
             .replacingOccurrences(of: "\n", with: "")
         let blocked = ["傻逼","他妈的","操你妈","fuck","shit","习近平","法轮功","六四","台独","赌博","毒品"]
         return !blocked.contains { normalized.contains($0.lowercased()) }
+    }
+
+    private func proofRejectionReason(proof: String, title: String, description: String, hasImage: Bool, strict: Bool) -> String? {
+        let trimmed = proof.trimmingCharacters(in: .whitespacesAndNewlines)
+        let compact = trimmed
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+        let lazyProofs = ["完成了", "已完成", "做完了", "好了", "ok", "done", "1", "111", "随便", "测试", "通过", "交了"]
+
+        if lazyProofs.contains(where: { compact == $0 || compact.contains($0) && compact.count <= 10 }) {
+            return "证明太空泛了，请写清楚你具体做了什么、怎么做的、结果是什么。"
+        }
+
+        let minimumLength = hasImage ? (strict ? 14 : 10) : (strict ? 28 : 18)
+        if trimmed.count < minimumLength {
+            return hasImage ? "图片证明还需要配一段具体说明。" : "文字证明太短了，请补充完成过程或结果。"
+        }
+
+        let actionWords = ["完成", "整理", "学习", "阅读", "运动", "记录", "拍摄", "提交", "联系", "沟通", "帮助", "复盘", "计时", "打卡", "制作", "清理", "练习", "写下", "标注", "定位", "观察"]
+        if !actionWords.contains(where: { compact.contains($0) }) {
+            return "证明里缺少具体行动，请描述你实际做过的动作。"
+        }
+
+        if strict && !hasImage && relevanceScore(proof: compact, title: title, description: description) < 1 {
+            return "大厅任务证明需要和任务内容明显相关，建议补充关键词、过程或上传图片。"
+        }
+
+        return nil
+    }
+
+    private func relevanceScore(proof: String, title: String, description: String) -> Int {
+        let source = "\(title)\(description)"
+        let terms = source
+            .components(separatedBy: CharacterSet(charactersIn: " ，。！？、：；（）()「」【】[]-/\n"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.count >= 2 && $0.count <= 8 }
+        return Set(terms).reduce(0) { score, term in
+            score + (proof.contains(term.lowercased()) ? 1 : 0)
+        }
     }
 
     private func notify(_ message: String) {

@@ -8,8 +8,9 @@ loadEnv();
 const PORT = Number(process.env.PORT || 8787);
 const ARK_API_KEY = process.env.ARK_API_KEY;
 const DOUBAO_MODEL = process.env.DOUBAO_MODEL || "doubao-seed-2-0-lite-260428";
-const ARK_URL = "https://ark.cn-beijing.volces.com/api/v3/responses";
-const ARK_TIMEOUT_MS = 45_000;
+const ARK_RESPONSES_URL = "https://ark.cn-beijing.volces.com/api/v3/responses";
+const ARK_CHAT_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
+const ARK_TIMEOUT_MS = 35_000;
 const ARK_RETRY_COUNT = 2;
 const FALLBACK_DOUBAO_MODELS = [
   "doubao-seed-1-6-vision-250815"
@@ -28,7 +29,7 @@ const server = http.createServer(async (req, res) => {
         service: "SystemWorld AI Backend",
         platform: "Tencent Cloud",
         models: doubaoModels(),
-        api: "responses",
+        api: "chat+responses",
         hasKey: Boolean(ARK_API_KEY)
       });
     }
@@ -162,7 +163,42 @@ async function callDoubao(operation, prompt, imageBase64, imageMimeType) {
 }
 
 async function callDoubaoModel(model, operation, userContent) {
-  const result = await postJSON(ARK_URL, {
+  if (isTextOnlyContent(userContent)) {
+    return await callDoubaoChatModel(model, operation, userContent[0].text);
+  }
+
+  return await callDoubaoResponsesModel(model, operation, userContent);
+}
+
+async function callDoubaoChatModel(model, operation, prompt) {
+  const result = await postJSON(ARK_CHAT_URL, {
+    model,
+    messages: [
+      {
+        role: "system",
+        content: systemInstruction(operation)
+      },
+      {
+        role: "user",
+        content: prompt
+      }
+    ],
+    temperature: 0.75,
+    max_tokens: maxOutputTokens(operation)
+  }, {
+    "Authorization": `Bearer ${ARK_API_KEY}`
+  }, ARK_TIMEOUT_MS);
+
+  if (result.statusCode < 200 || result.statusCode >= 300) {
+    throw new Error(`Doubao ${result.statusCode}: ${result.text}`);
+  }
+
+  const json = JSON.parse(result.text || "{}");
+  return extractResponseText(json);
+}
+
+async function callDoubaoResponsesModel(model, operation, userContent) {
+  const result = await postJSON(ARK_RESPONSES_URL, {
     model,
     input: [
       {
@@ -183,6 +219,13 @@ async function callDoubaoModel(model, operation, userContent) {
 
   const json = JSON.parse(result.text || "{}");
   return extractResponseText(json);
+}
+
+function isTextOnlyContent(userContent) {
+  return Array.isArray(userContent) &&
+    userContent.length === 1 &&
+    userContent[0]?.type === "input_text" &&
+    typeof userContent[0]?.text === "string";
 }
 
 function postJSON(urlString, body, headers, timeoutMs) {
