@@ -449,19 +449,27 @@ final class SystemStore: ObservableObject {
     private func parseSystem(from json: String) -> NovelSystem? {
         guard let data = cleanedJSON(json).data(using: .utf8),
               let d = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        let specialty: String
+        if let text = d["specialty"] as? String {
+            specialty = text
+        } else if let items = d["specialty"] as? [String] {
+            specialty = items.prefix(2).joined(separator: "、")
+        } else {
+            specialty = "全能"
+        }
         return NovelSystem(name: d["name"] as? String ?? "未知系统",
-                           star: d["starRating"] as? Int ?? 3,
+                           star: safeStar(intValue(from: d["starRating"]) ?? 3),
                            type: d["type"] as? String ?? "未知",
                            personality: d["personality"] as? String ?? "神秘",
                            intro: d["intro"] as? String ?? "一个神秘的系统...",
                            icon: d["icon"] as? String ?? "🌟",
-                           specialty: d["specialty"] as? String ?? "全能")
+                           specialty: specialty)
     }
 
     private func parseTask(from json: String, systemName: String) -> SystemTask? {
         guard let data = cleanedJSON(json).data(using: .utf8),
               let d = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        let difficulty = safeDifficulty(d["difficulty"] as? Int)
+        let difficulty = safeDifficulty(intValue(from: d["difficulty"]))
         let reward = rewardForDifficulty(difficulty)
         let title = sanitizedTaskText(d["title"] as? String)
         let description = sanitizedTaskText(d["description"] as? String)
@@ -605,6 +613,20 @@ final class SystemStore: ObservableObject {
 
     private func safeDifficulty(_ value: Int?) -> Int {
         min(max(value ?? 2, 1), 5)
+    }
+
+    private func safeStar(_ value: Int) -> Int {
+        min(max(value, 1), 5)
+    }
+
+    private func intValue(from value: Any?) -> Int? {
+        if let int = value as? Int { return int }
+        if let double = value as? Double { return Int(double.rounded()) }
+        if let string = value as? String {
+            let digits = string.prefix { $0.isNumber }
+            return Int(digits)
+        }
+        return nil
     }
 
     private func rewardForDifficulty(_ difficulty: Int) -> (coins: Int, exp: Int) {
