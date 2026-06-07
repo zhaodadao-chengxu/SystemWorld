@@ -16,7 +16,7 @@ echo "==> 更新服务器组件"
 apt-get update -y
 apt-get install -y ca-certificates curl git
 
-if ! command -v node >/dev/null 2>&1 || [ "$(node -p 'Number(process.versions.node.split(\".\")[0])')" -lt 20 ]; then
+if ! command -v node >/dev/null 2>&1 || [ "$(node -p 'Number(process.versions.node.split(".")[0])')" -lt 20 ]; then
   echo "==> 安装 Node.js 22"
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -y nodejs

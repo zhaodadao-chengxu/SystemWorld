@@ -1,4 +1,5 @@
 import http from "node:http";
+import https from "node:https";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -24,7 +25,7 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, {
         ok: true,
         service: "SystemWorld AI Backend",
-        platform: "Render",
+        platform: "Tencent Cloud",
         models: doubaoModels(),
         api: "responses",
         hasKey: Boolean(ARK_API_KEY)
@@ -154,48 +155,67 @@ async function callDoubao(operation, prompt, imageBase64, imageMimeType) {
 }
 
 async function callDoubaoModel(model, operation, userContent) {
-  const response = await fetchWithTimeout(ARK_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${ARK_API_KEY}`
-    },
-    body: JSON.stringify({
-      model,
-      input: [
-        {
-          role: "user",
-          content: userContent
-        }
-      ],
-      instructions: systemInstruction(operation),
-      temperature: 0.85,
-      max_output_tokens: 650
-    })
+  const result = await postJSON(ARK_URL, {
+    model,
+    input: [
+      {
+        role: "user",
+        content: userContent
+      }
+    ],
+    instructions: systemInstruction(operation),
+    temperature: 0.85,
+    max_output_tokens: 650
+  }, {
+    "Authorization": `Bearer ${ARK_API_KEY}`
   }, ARK_TIMEOUT_MS);
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Doubao ${response.status}: ${text}`);
+  if (result.statusCode < 200 || result.statusCode >= 300) {
+    throw new Error(`Doubao ${result.statusCode}: ${result.text}`);
   }
 
-  const json = await response.json();
+  const json = JSON.parse(result.text || "{}");
   return extractResponseText(json);
 }
 
-async function fetchWithTimeout(url, options, timeoutMs) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort("timeout"), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } catch (error) {
-    if (error?.name === "AbortError" || String(error?.message || "").includes("timeout")) {
-      throw new Error("Doubao request timeout");
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
+function postJSON(urlString, body, headers, timeoutMs) {
+  const url = new URL(urlString);
+  const text = JSON.stringify(body);
+
+  return new Promise((resolvePromise, reject) => {
+    const req = https.request({
+      hostname: url.hostname,
+      port: url.port || 443,
+      path: `${url.pathname}${url.search}`,
+      method: "POST",
+      family: 4,
+      timeout: timeoutMs,
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(text),
+        ...headers
+      }
+    }, response => {
+      let responseText = "";
+      response.setEncoding("utf8");
+      response.on("data", chunk => {
+        responseText += chunk;
+      });
+      response.on("end", () => {
+        resolvePromise({
+          statusCode: response.statusCode || 0,
+          text: responseText
+        });
+      });
+    });
+
+    req.on("timeout", () => {
+      req.destroy(new Error("Doubao request timeout"));
+    });
+    req.on("error", reject);
+    req.write(text);
+    req.end();
+  });
 }
 
 function doubaoModels() {
