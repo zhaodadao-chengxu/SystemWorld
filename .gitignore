@@ -1,5 +1,6 @@
 Backend/.env
 Backend/node_modules/
+.wrangler/
 .DS_Store
 DerivedData/
 *.xcuserstate
