@@ -2,6 +2,9 @@ const ARK_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
 const RATE_WINDOW_MS = 60_000;
 const RATE_LIMIT = 60;
 const MAX_PROMPT_LENGTH = 4_000;
+const FALLBACK_DOUBAO_MODELS = [
+  "doubao-seed-1-6-vision-250815"
+];
 const rateBuckets = new Map();
 
 export default {
@@ -14,7 +17,7 @@ export default {
           ok: true,
           service: "SystemWorld AI Backend",
           platform: "Cloudflare Workers",
-          model: env.DOUBAO_MODEL || "doubao-seed-2-0-lite-260215",
+          models: doubaoModels(env),
           hasKey: Boolean(env.ARK_API_KEY)
         });
       }
@@ -72,6 +75,22 @@ async function callDoubao(env, operation, prompt, imageBase64, imageMimeType) {
       ]
     : prompt;
 
+  let lastError;
+  for (const model of doubaoModels(env)) {
+    try {
+      return await callDoubaoModel(env, model, operation, userContent);
+    } catch (error) {
+      lastError = error;
+      if (!isModelUnavailableError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError || new Error("No Doubao model is available");
+}
+
+async function callDoubaoModel(env, model, operation, userContent) {
   const response = await fetch(ARK_URL, {
     method: "POST",
     headers: {
@@ -79,7 +98,7 @@ async function callDoubao(env, operation, prompt, imageBase64, imageMimeType) {
       "Authorization": `Bearer ${env.ARK_API_KEY}`
     },
     body: JSON.stringify({
-      model: env.DOUBAO_MODEL || "doubao-seed-2-0-lite-260215",
+      model,
       messages: [
         { role: "system", content: systemInstruction(operation) },
         { role: "user", content: userContent }
@@ -96,6 +115,18 @@ async function callDoubao(env, operation, prompt, imageBase64, imageMimeType) {
 
   const json = await response.json();
   return json?.choices?.[0]?.message?.content || "{}";
+}
+
+function doubaoModels(env) {
+  const primary = env.DOUBAO_MODEL || "doubao-seed-2-0-lite-260215";
+  return [primary, ...FALLBACK_DOUBAO_MODELS].filter((model, index, models) => {
+    return model && models.indexOf(model) === index;
+  });
+}
+
+function isModelUnavailableError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("model") || message.includes("not found") || message.includes("404");
 }
 
 function friendlyErrorMessage(error) {

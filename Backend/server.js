@@ -8,6 +8,9 @@ const PORT = Number(process.env.PORT || 8787);
 const ARK_API_KEY = process.env.ARK_API_KEY;
 const DOUBAO_MODEL = process.env.DOUBAO_MODEL || "doubao-seed-2-0-lite-260215";
 const ARK_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
+const FALLBACK_DOUBAO_MODELS = [
+  "doubao-seed-1-6-vision-250815"
+];
 
 const rateBuckets = new Map();
 const RATE_WINDOW_MS = 60_000;
@@ -20,7 +23,7 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, {
         ok: true,
         service: "SystemWorld AI Backend",
-        model: DOUBAO_MODEL,
+        models: doubaoModels(),
         hasKey: Boolean(ARK_API_KEY)
       });
     }
@@ -132,6 +135,22 @@ async function callDoubao(operation, prompt, imageBase64, imageMimeType) {
       ]
     : prompt;
 
+  let lastError;
+  for (const model of doubaoModels()) {
+    try {
+      return await callDoubaoModel(model, operation, userContent);
+    } catch (error) {
+      lastError = error;
+      if (!isModelUnavailableError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError || new Error("No Doubao model is available");
+}
+
+async function callDoubaoModel(model, operation, userContent) {
   const response = await fetch(ARK_URL, {
     method: "POST",
     headers: {
@@ -139,7 +158,7 @@ async function callDoubao(operation, prompt, imageBase64, imageMimeType) {
       "Authorization": `Bearer ${ARK_API_KEY}`
     },
     body: JSON.stringify({
-      model: DOUBAO_MODEL,
+      model,
       messages: [
         { role: "system", content: systemInstruction(operation) },
         { role: "user", content: userContent }
@@ -156,6 +175,17 @@ async function callDoubao(operation, prompt, imageBase64, imageMimeType) {
 
   const json = await response.json();
   return json?.choices?.[0]?.message?.content || "{}";
+}
+
+function doubaoModels() {
+  return [DOUBAO_MODEL, ...FALLBACK_DOUBAO_MODELS].filter((model, index, models) => {
+    return model && models.indexOf(model) === index;
+  });
+}
+
+function isModelUnavailableError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("model") || message.includes("not found") || message.includes("404");
 }
 
 function friendlyErrorMessage(error) {
