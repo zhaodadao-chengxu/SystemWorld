@@ -32,14 +32,11 @@ final class SystemStore: ObservableObject {
     private let tencentAIBackendURL = URL(string: "http://43.128.42.179/api/ai")!
     private let cloudflareAIBackendURL = URL(string: "https://systemworld-ai-zhaodadao.420987231.workers.dev/api/ai")!
     private let localAIBackendURL = URL(string: "http://127.0.0.1:8787/api/ai")!
+    private let aiRequestTimeout: TimeInterval = 14
     private var lastAIErrorMessage: String?
 
     private var aiBackendURLs: [URL] {
-        #if DEBUG
-        [localAIBackendURL, tencentAIBackendURL, renderAIBackendURL, cloudflareAIBackendURL]
-        #else
-        [tencentAIBackendURL, renderAIBackendURL, cloudflareAIBackendURL]
-        #endif
+        [tencentAIBackendURL]
     }
 
     var isAIBackendConfigured: Bool {
@@ -391,7 +388,7 @@ final class SystemStore: ObservableObject {
             var req = URLRequest(url: url)
             req.httpMethod = "POST"
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.timeoutInterval = 55
+            req.timeoutInterval = aiRequestTimeout
             req.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
             do {

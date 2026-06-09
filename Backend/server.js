@@ -10,8 +10,9 @@ const ARK_API_KEY = process.env.ARK_API_KEY;
 const DOUBAO_MODEL = process.env.DOUBAO_MODEL || "doubao-seed-2-0-lite-260428";
 const ARK_RESPONSES_URL = "https://ark.cn-beijing.volces.com/api/v3/responses";
 const ARK_CHAT_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
-const ARK_TIMEOUT_MS = 35_000;
-const ARK_RETRY_COUNT = 2;
+const ARK_TEXT_TIMEOUT_MS = 12_000;
+const ARK_IMAGE_TIMEOUT_MS = 18_000;
+const ARK_RETRY_COUNT = 1;
 const FALLBACK_DOUBAO_MODELS = [
   "doubao-seed-1-6-vision-250815"
 ];
@@ -187,7 +188,7 @@ async function callDoubaoChatModel(model, operation, prompt) {
     max_tokens: maxOutputTokens(operation)
   }, {
     "Authorization": `Bearer ${ARK_API_KEY}`
-  }, ARK_TIMEOUT_MS);
+  }, ARK_TEXT_TIMEOUT_MS);
 
   if (result.statusCode < 200 || result.statusCode >= 300) {
     throw new Error(`Doubao ${result.statusCode}: ${result.text}`);
@@ -211,7 +212,7 @@ async function callDoubaoResponsesModel(model, operation, userContent) {
     max_output_tokens: maxOutputTokens(operation)
   }, {
     "Authorization": `Bearer ${ARK_API_KEY}`
-  }, ARK_TIMEOUT_MS);
+  }, ARK_IMAGE_TIMEOUT_MS);
 
   if (result.statusCode < 200 || result.statusCode >= 300) {
     throw new Error(`Doubao ${result.statusCode}: ${result.text}`);
