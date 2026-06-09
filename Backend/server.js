@@ -10,7 +10,7 @@ const ARK_API_KEY = process.env.ARK_API_KEY;
 const DOUBAO_MODEL = process.env.DOUBAO_MODEL || "doubao-seed-2-0-lite-260428";
 const ARK_RESPONSES_URL = "https://ark.cn-beijing.volces.com/api/v3/responses";
 const ARK_CHAT_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
-const ARK_TEXT_TIMEOUT_MS = 12_000;
+const ARK_TEXT_TIMEOUT_MS = 6_000;
 const ARK_IMAGE_TIMEOUT_MS = 18_000;
 const ARK_RETRY_COUNT = 1;
 const FALLBACK_DOUBAO_MODELS = [
@@ -143,7 +143,8 @@ async function callDoubao(operation, prompt, imageBase64, imageMimeType) {
       ];
 
   let lastError;
-  for (const model of doubaoModels()) {
+  const models = imageBase64 ? doubaoModels() : [DOUBAO_MODEL];
+  for (const model of models) {
     for (let attempt = 1; attempt <= ARK_RETRY_COUNT; attempt += 1) {
       try {
         return await callDoubaoModel(model, operation, userContent);

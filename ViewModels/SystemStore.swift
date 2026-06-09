@@ -32,7 +32,7 @@ final class SystemStore: ObservableObject {
     private let tencentAIBackendURL = URL(string: "http://43.128.42.179/api/ai")!
     private let cloudflareAIBackendURL = URL(string: "https://systemworld-ai-zhaodadao.420987231.workers.dev/api/ai")!
     private let localAIBackendURL = URL(string: "http://127.0.0.1:8787/api/ai")!
-    private let aiRequestTimeout: TimeInterval = 14
+    private let aiRequestTimeout: TimeInterval = 8
     private var lastAIErrorMessage: String?
 
     private var aiBackendURLs: [URL] {
