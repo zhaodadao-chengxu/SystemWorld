@@ -235,6 +235,16 @@ function postJSON(urlString, body, headers, timeoutMs) {
   const text = JSON.stringify(body);
 
   return new Promise((resolvePromise, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hardTimeout);
+      callback(value);
+    };
+    const hardTimeout = setTimeout(() => {
+      req.destroy(new Error(`Doubao hard timeout after ${timeoutMs}ms`));
+    }, timeoutMs);
     const req = https.request({
       hostname: url.hostname,
       port: url.port || 443,
@@ -256,7 +266,7 @@ function postJSON(urlString, body, headers, timeoutMs) {
         responseText += chunk;
       });
       response.on("end", () => {
-        resolvePromise({
+        finish(resolvePromise, {
           statusCode: response.statusCode || 0,
           text: responseText
         });
@@ -266,7 +276,7 @@ function postJSON(urlString, body, headers, timeoutMs) {
     req.on("timeout", () => {
       req.destroy(new Error("Doubao request timeout"));
     });
-    req.on("error", reject);
+    req.on("error", error => finish(reject, error));
     req.write(text);
     req.end();
   });
